@@ -1444,6 +1444,7 @@ impl<'db> DbInterner<'db> {
                 TyKind::Tuple(params) => params,
                 _ => panic!(),
             };
+            // FIXME(splat): Splat is unsupported on closures.
             self.mk_fn_sig(params, s.output(), s.c_variadic, safety, FnAbi::Rust)
         })
     }

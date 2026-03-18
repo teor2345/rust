@@ -614,9 +614,9 @@ fn report_unexpected_variant_res(
 }
 
 /// Controls whether the arguments are tupled. This is used for the call
-/// operator.
+/// operator and function argument splatting.
 ///
-/// Tupling means that all call-side arguments are packed into a tuple and
+/// Tupling means that trailing call-side arguments are packed into a tuple and
 /// passed as a single parameter. For example, if tupling is enabled, this
 /// function:
 /// ```
@@ -632,10 +632,44 @@ fn report_unexpected_variant_res(
 /// # fn f(x: (isize, isize)) {}
 /// f((1, 2));
 /// ```
-#[derive(Copy, Clone, Eq, PartialEq)]
+///
+/// For the call operator, all arguments are tupled. For splatting, trailing arguments after
+/// `#[splat]` in the function signature are tupled.
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
 enum TupleArgumentsFlag {
+    /// Arguments are typechecked unchanged.
     DontTupleArguments,
-    TupleArguments,
+    /// All caller arguments are tupled before typechecking.
+    TupleAllArguments,
+    /// Caller arguments are tupled before typechecking, starting at the given index.
+    /// Tupling makes the callee and caller argument counts match.
+    /// See `check_argument_types` for more details.
+    TupleSplattedArgument { index: u16 },
+}
+
+impl TupleArgumentsFlag {
+    // Create a TupleArgumentsFlag from `FnArgsKind::splatted()`.
+    fn with_splatted(splatted: Option<u16>) -> Self {
+        match splatted {
+            None => Self::DontTupleArguments,
+            Some(index) => Self::TupleSplattedArgument { index },
+        }
+    }
+
+    // Which argument of the callee is tupled, if any?
+    fn splatted(&self) -> Option<u16> {
+        match self {
+            Self::DontTupleArguments => None,
+            // The callee always has a single tuple argument.
+            Self::TupleAllArguments => Some(0),
+            // The last argument of the callee is a splatted tuple in the caller.
+            Self::TupleSplattedArgument { index } => Some(*index),
+        }
+    }
+
+    fn is_splatted(&self) -> bool {
+        matches!(self, Self::TupleSplattedArgument { .. })
+    }
 }
 
 fn fatally_break_rust(tcx: TyCtxt<'_>, span: Span) -> ! {

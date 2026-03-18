@@ -320,6 +320,40 @@ impl<I: Interner> TyKind<I> {
         }
     }
 
+    pub fn def_id(self) -> Option<I::DefId> {
+        match self {
+            ty::Adt(adt, ..) => Some(adt.def_id().into()),
+            ty::Foreign(def_id) => Some(def_id.into()),
+            ty::FnDef(def_id, ..) => Some(def_id.into()),
+            ty::Closure(def_id, ..) => Some(def_id.into()),
+            ty::CoroutineClosure(def_id, ..) => Some(def_id.into()),
+            ty::Coroutine(def_id, ..) => Some(def_id.into()),
+            ty::CoroutineWitness(def_id, ..) => Some(def_id.into()),
+            ty::Alias(alias) => Some(alias.kind.def_id().into()),
+            ty::Bool
+            | ty::Char
+            | ty::Int(_)
+            | ty::Uint(_)
+            | ty::Float(_)
+            | ty::Str
+            | ty::Array(_, _)
+            | ty::Pat(_, _)
+            | ty::Slice(_)
+            | ty::RawPtr(_, _)
+            | ty::Ref(_, _, _)
+            | ty::FnPtr(..)
+            | ty::UnsafeBinder(_)
+            | ty::Dynamic(_, _)
+            | ty::Never
+            | ty::Tuple(_)
+            | ty::Param(_)
+            | ty::Bound(_, _)
+            | ty::Placeholder(_)
+            | ty::Infer(_)
+            | ty::Error(..) => None,
+        }
+    }
+
     /// Returns `true` when the outermost type cannot be further normalized,
     /// resolved, or instantiated.
     ///
@@ -760,6 +794,12 @@ pub struct TypeAndMut<I: Interner> {
 
 impl<I: Interner> Eq for TypeAndMut<I> {}
 
+/// Error type for an unsupported splatted argument index.
+/// Currently the only unsupported index is `u16::MAX`, which is used to indicate that no argument
+/// is splatted.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct InvalidSplattedArgIndexError;
+
 /// Contains the packed non-type fields of a function signature.
 // FIXME(splat): add the splatted argument index as a u16
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
@@ -771,6 +811,11 @@ pub struct FnSigKind {
     /// Holds the c_variadic and safety bitflags, and 6 bits for the `ExternAbi` variant and unwind
     /// flag.
     flags: u8,
+
+    /// Which function argument is splatted into multiple arguments in callers, if any?
+    /// Splatting the `u16::MAX`th argument is not supported, because it likely pushes the caller
+    /// over the fn args limit. (And spending an extra byte on an edge case is not worth the perf.)
+    splatted: u16,
 }
 
 impl fmt::Debug for FnSigKind {
@@ -787,7 +832,11 @@ impl fmt::Debug for FnSigKind {
 
         if self.c_variadic() {
             f.field(&"CVariadic");
-        };
+        }
+
+        if let Some(index) = self.splatted() {
+            f.field(&format!("Splatted({})", index));
+        }
 
         f.finish()
     }
@@ -803,11 +852,21 @@ impl FnSigKind {
     /// Bitflag for a trailing C-style variadic argument.
     const C_VARIADIC_FLAG: u8 = 1 << 7;
 
+    /// The marker index for "no splatted arguments".
+    /// Must have the same value as `FnDeclFlags::NO_SPLATTED_ARG_INDEX` and `rustc_ast::FnDecl::NO_SPLATTED_ARG_INDEX`.
+    ///
+    /// This is an implementation detail, which should only be used in low-level encoding.
+    pub const NO_SPLATTED_ARG_INDEX: u16 = u16::MAX;
+
     /// Create a new FnSigKind with the "Rust" ABI, "Unsafe" safety, and no C-style variadic argument.
     /// To modify these flags, use the `set_*` methods, for readability.
     // FIXME: use Default instead when that trait is const stable.
     pub const fn default() -> Self {
-        Self { flags: 0 }.set_abi(ExternAbi::Rust).set_safe(false).set_c_variadic(false)
+        Self { flags: 0, splatted: 0 }
+            .set_abi(ExternAbi::Rust)
+            .set_safe(false)
+            .set_c_variadic(false)
+            .set_no_splatted_args()
     }
 
     /// Set the ABI, including the unwind flag.
@@ -846,6 +905,32 @@ impl FnSigKind {
         self
     }
 
+    /// Set the splatted argument index.
+    #[must_use = "this method does not modify the receiver"]
+    pub const fn set_splatted(
+        mut self,
+        splatted: Option<u16>,
+    ) -> Result<Self, InvalidSplattedArgIndexError> {
+        if let Some(index) = splatted {
+            if index == Self::NO_SPLATTED_ARG_INDEX {
+                return Err(InvalidSplattedArgIndexError);
+            }
+
+            self.splatted = index;
+        } else {
+            self.splatted = Self::NO_SPLATTED_ARG_INDEX;
+        }
+
+        Ok(self)
+    }
+
+    /// Set the splatted argument index to "no splatted arguments".
+    #[must_use = "this method does not modify the receiver"]
+    pub const fn set_no_splatted_args(mut self) -> Self {
+        self.splatted = Self::NO_SPLATTED_ARG_INDEX;
+        self
+    }
+
     /// Get the ABI, including the unwind flag.
     pub const fn abi(self) -> ExternAbi {
         let abi_index = self.flags & Self::EXTERN_ABI_MASK;
@@ -860,6 +945,11 @@ impl FnSigKind {
     /// Do the function arguments end with a C-style variadic argument?
     pub const fn c_variadic(self) -> bool {
         self.flags & Self::C_VARIADIC_FLAG != 0
+    }
+
+    /// Get the index of the splatted argument, if any.
+    pub const fn splatted(self) -> Option<u16> {
+        if self.splatted == Self::NO_SPLATTED_ARG_INDEX { None } else { Some(self.splatted) }
     }
 }
 
@@ -891,13 +981,18 @@ impl<I: Interner> FnSig<I> {
         !self.c_variadic() && self.safety().is_safe() && self.abi().is_rust()
     }
 
+    /// Set the safety flag.
+    #[must_use = "this method does not modify the receiver"]
     pub fn set_safe(self, is_safe: bool) -> Self {
         Self {
+            // FIXME(splat): for perf we might need a new method that panics on invalid splats
             fn_sig_kind: I::FSigKind::new(
                 self.abi(),
                 if is_safe { I::Safety::safe() } else { I::Safety::unsafe_mode() },
                 self.c_variadic(),
-            ),
+                self.splatted(),
+            )
+            .unwrap(),
             ..self
         }
     }
@@ -914,10 +1009,14 @@ impl<I: Interner> FnSig<I> {
         self.fn_sig_kind.c_variadic()
     }
 
+    pub fn splatted(self) -> Option<u16> {
+        self.fn_sig_kind.splatted()
+    }
+
     pub fn dummy() -> Self {
         Self {
             inputs_and_output: Default::default(),
-            fn_sig_kind: I::FSigKind::new(I::Abi::rust(), I::Safety::safe(), false),
+            fn_sig_kind: I::FSigKind::new_no_splatted(I::Abi::rust(), I::Safety::safe(), false),
         }
     }
 }
@@ -949,6 +1048,10 @@ impl<I: Interner> ty::Binder<I, FnSig<I>> {
 
     pub fn c_variadic(self) -> bool {
         self.skip_binder().c_variadic()
+    }
+
+    pub fn splatted(self) -> Option<u16> {
+        self.skip_binder().splatted()
     }
 
     pub fn safety(self) -> I::Safety {
@@ -985,6 +1088,9 @@ impl<I: Interner> fmt::Debug for FnSig<I> {
         for (i, ty) in inputs.iter().enumerate() {
             if i > 0 {
                 write!(f, ", ")?;
+            }
+            if Some(i) == fn_sig_kind.splatted().map(usize::from) {
+                write!(f, "#[splat] ")?;
             }
             write!(f, "{ty:?}")?;
         }
@@ -1148,7 +1254,7 @@ impl<I: Interner> FnHeader<I> {
     }
 
     pub fn dummy() -> Self {
-        Self { fn_sig_kind: I::FSigKind::new(I::Abi::rust(), I::Safety::safe(), false) }
+        Self { fn_sig_kind: I::FSigKind::new_no_splatted(I::Abi::rust(), I::Safety::safe(), false) }
     }
 }
 

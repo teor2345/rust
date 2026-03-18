@@ -237,6 +237,15 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
     }
 
     #[instrument(level = "debug", skip(self))]
+    pub(crate) fn write_splatted_resolution(
+        &self,
+        hir_id: HirId,
+        r: Result<(DefKind, DefId, u16 /* arg_index */, u16 /* args_count */), ErrorGuaranteed>,
+    ) {
+        self.typeck_results.borrow_mut().splatted_defs_mut().insert(hir_id, r);
+    }
+
+    #[instrument(level = "debug", skip(self))]
     pub(crate) fn write_method_call_and_enforce_effects(
         &self,
         hir_id: HirId,
@@ -246,6 +255,27 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         self.enforce_context_effects(Some(hir_id), span, method.def_id, method.args);
         self.write_resolution(hir_id, Ok((DefKind::AssocFn, method.def_id)));
         self.write_args(hir_id, method.args);
+    }
+
+    #[instrument(level = "debug", skip(self))]
+    pub(crate) fn write_splatted_call(
+        &self,
+        hir_id: HirId,
+        span: Span,
+        callee_def_kind: DefKind,
+        callee_def_id: DefId,
+        callee_generic_args: GenericArgsRef<'tcx>,
+        first_tupled_arg_index: u16,
+        tupled_args_count: u16,
+    ) {
+        // FIXME(const_trait_impl): enforce constness using enforce_context_effects() and add
+        // _and_enforce_effects to this method's name
+
+        self.write_splatted_resolution(
+            hir_id,
+            Ok((callee_def_kind, callee_def_id, first_tupled_arg_index, tupled_args_count)),
+        );
+        self.write_args(hir_id, callee_generic_args);
     }
 
     fn write_args(&self, node_id: HirId, args: GenericArgsRef<'tcx>) {

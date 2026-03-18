@@ -14,7 +14,8 @@ use crate::relate::Relate;
 use crate::solve::{AdtDestructorKind, SizedTraitKind};
 use crate::visit::{Flags, TypeSuperVisitable, TypeVisitable};
 use crate::{
-    self as ty, ClauseKind, CollectAndApply, FieldInfo, Interner, PredicateKind, UpcastFrom,
+    self as ty, ClauseKind, CollectAndApply, FieldInfo, Interner, InvalidSplattedArgIndexError,
+    PredicateKind, UpcastFrom,
 };
 
 #[rust_analyzer::prefer_underscore_import]
@@ -210,8 +211,19 @@ pub trait FSigKind<I: Interner<FSigKind = Self>>: Copy + Debug + Hash + Eq {
     /// The identity function.
     fn fn_sig_kind(self) -> Self;
 
-    /// Create a new FnSigKind with the given ABI, safety, and C-style variadic flag.
-    fn new(abi: I::Abi, safety: I::Safety, c_variadic: bool) -> Self;
+    /// Create a new FnSigKind with the given ABI, safety, C-style variadic flag, and splatted
+    /// argument index.
+    ///
+    /// Returns an error if the splatted argument index is invalid (e.g. `u16::MAX`).
+    fn new(
+        abi: I::Abi,
+        safety: I::Safety,
+        c_variadic: bool,
+        splatted: Option<u16>,
+    ) -> Result<Self, InvalidSplattedArgIndexError>;
+
+    /// Create a new FnSigKind with the given ABI, safety, C-style variadic flag, and no splatted argument index.
+    fn new_no_splatted(abi: I::Abi, safety: I::Safety, c_variadic: bool) -> Self;
 
     /// Returns the ABI.
     fn abi(self) -> I::Abi;
@@ -221,6 +233,9 @@ pub trait FSigKind<I: Interner<FSigKind = Self>>: Copy + Debug + Hash + Eq {
 
     /// Do the function arguments end with a C-style variadic argument?
     fn c_variadic(self) -> bool;
+
+    /// Get the index of the splatted argument, if any.
+    fn splatted(self) -> Option<u16>;
 }
 
 #[rust_analyzer::prefer_underscore_import]

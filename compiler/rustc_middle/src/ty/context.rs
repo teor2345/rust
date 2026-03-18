@@ -48,7 +48,8 @@ use rustc_span::{DUMMY_SP, Ident, Span, Symbol, kw, sym};
 use rustc_type_ir::TyKind::*;
 pub use rustc_type_ir::lift::Lift;
 use rustc_type_ir::{
-    CollectAndApply, FnSigKind, TypeFlags, WithCachedTypeInfo, elaborate, search_graph,
+    CollectAndApply, FnSigKind, InvalidSplattedArgIndexError, TypeFlags, WithCachedTypeInfo,
+    elaborate, search_graph,
 };
 use tracing::{debug, instrument};
 
@@ -91,7 +92,20 @@ impl<'tcx> rustc_type_ir::inherent::FSigKind<TyCtxt<'tcx>> for FnSigKind {
         self
     }
 
-    fn new(abi: ExternAbi, safety: hir::Safety, c_variadic: bool) -> Self {
+    fn new(
+        abi: ExternAbi,
+        safety: hir::Safety,
+        c_variadic: bool,
+        splatted: Option<u16>,
+    ) -> Result<Self, InvalidSplattedArgIndexError> {
+        FnSigKind::default()
+            .set_abi(abi)
+            .set_safe(safety.is_safe())
+            .set_c_variadic(c_variadic)
+            .set_splatted(splatted)
+    }
+
+    fn new_no_splatted(abi: ExternAbi, safety: hir::Safety, c_variadic: bool) -> Self {
         FnSigKind::default().set_abi(abi).set_safe(safety.is_safe()).set_c_variadic(c_variadic)
     }
 
@@ -105,6 +119,10 @@ impl<'tcx> rustc_type_ir::inherent::FSigKind<TyCtxt<'tcx>> for FnSigKind {
 
     fn c_variadic(self) -> bool {
         self.c_variadic()
+    }
+
+    fn splatted(self) -> Option<u16> {
+        self.splatted()
     }
 }
 
@@ -2193,6 +2211,9 @@ impl<'tcx> TyCtxt<'tcx> {
                 ty::Tuple(params) => *params,
                 _ => bug!(),
             };
+            // FIXME(splat): currently splatted closure arguments are not supported
+            // (the semantics are tricky because there's already de-tupling)
+            assert!(s.splatted().is_none());
             self.mk_fn_sig(
                 params,
                 s.output(),

@@ -1844,6 +1844,32 @@ impl<'hir, R: ResolverAstLoweringExt<'hir>> LoweringContext<'_, 'hir, R> {
         coro: Option<CoroutineKind>,
     ) -> &'hir hir::FnDecl<'hir> {
         let c_variadic = decl.c_variadic();
+        let splatted = match decl.splatted() {
+            Ok(Some(index)) => Some(index),
+            Ok(None) => None,
+            Err(InvalidSplattedArgError::Duplicate { splatted_args, splatted_spans }) => {
+                self.dcx()
+                    .struct_span_err(
+                        splatted_spans,
+                        "`#[splat]` on multiple arguments is not allowed",
+                    )
+                    .with_help("remove `#[splat]` from all but one argument")
+                    .emit();
+                // Choose an arbitrary valid argument
+                splatted_args.last().copied()
+            }
+            Err(InvalidSplattedArgError::InvalidIndex(index, span)) => {
+                self.dcx()
+                    .struct_span_err(
+                        span,
+                        format!("`#[splat]` on an argument with index {index} is not supported"),
+                    )
+                    .with_help("move `#[splat]` to a different argument")
+                    .emit();
+                // Ignore the invalid argument
+                None
+            }
+        };
 
         // Skip the `...` (`CVarArgs`) trailing arguments from the AST,
         // as they are not explicit in HIR/Ty function signatures.
@@ -1937,7 +1963,9 @@ impl<'hir, R: ResolverAstLoweringExt<'hir>> LoweringContext<'_, 'hir, R> {
                 }
             }))
             .set_lifetime_elision_allowed(self.resolver.lifetime_elision_allowed(fn_node_id))
-            .set_c_variadic(c_variadic);
+            .set_c_variadic(c_variadic)
+            .set_splatted(splatted)
+            .unwrap();
 
         self.arena.alloc(hir::FnDecl { inputs, output, fn_decl_kind })
     }

@@ -96,6 +96,21 @@ impl<'tcx> TypeError<'tcx> {
                 if values.found { "variadic" } else { "non-variadic" }
             )
             .into(),
+            // FIXME(splat): for now, we assume splat is the last argument
+            TypeError::SplatMismatch(ref values) => format!(
+                "expected {} fn, found {} function",
+                if let Some(index) = values.expected {
+                    format!("splatted({index})")
+                } else {
+                    "non-splatted".to_string()
+                },
+                if let Some(index) = values.found {
+                    format!("splatted({index})")
+                } else {
+                    "non-splatted".to_string()
+                }
+            )
+            .into(),
             TypeError::ProjectionMismatched(ref values) => format!(
                 "expected `{}`, found `{}`",
                 tcx.def_path_str(values.expected),

@@ -3039,6 +3039,13 @@ impl Param {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum InvalidSplattedArgError {
+    Duplicate { splatted_args: Vec<u16>, splatted_spans: Vec<Span> },
+
+    InvalidIndex(u16, Span),
+}
+
 /// A signature (not the body) of a function declaration.
 ///
 /// E.g., `fn foo(bar: baz)`.
@@ -3052,11 +3059,46 @@ pub struct FnDecl {
 }
 
 impl FnDecl {
+    /// The marker index for "no splatted arguments".
+    /// Must have the same value as `FnSigKind::NO_SPLATTED_ARG_INDEX` and `FnDeclFlags::NO_SPLATTED_ARG_INDEX`.
+    pub const NO_SPLATTED_ARG_INDEX: u16 = u16::MAX;
+
     pub fn has_self(&self) -> bool {
         self.inputs.get(0).is_some_and(Param::is_self)
     }
+
     pub fn c_variadic(&self) -> bool {
         self.inputs.last().is_some_and(|arg| matches!(arg.ty.kind, TyKind::CVarArgs))
+    }
+
+    /// Returns the unique splatted index if present and valid, or an error containing the problem
+    /// with the splatted arguments.
+    pub fn splatted(&self) -> Result<Option<u16>, InvalidSplattedArgError> {
+        let (splatted_args, splatted_spans): (Vec<u16>, Vec<Span>) = self
+            .inputs
+            .iter()
+            .enumerate()
+            .filter_map(|(index, arg)| {
+                arg.attrs
+                    .iter()
+                    .any(|attr| attr.has_name(sym::splat))
+                    .then_some((u16::try_from(index).unwrap(), arg.span))
+            })
+            .unzip();
+
+        // The last argument is the "no splatted" marker index, so it is not supported.
+        if let (Some(index), Some(span)) = (splatted_args.last(), splatted_spans.last())
+            && *index == Self::NO_SPLATTED_ARG_INDEX
+        {
+            return Err(InvalidSplattedArgError::InvalidIndex(*index, *span));
+        }
+
+        // Multiple splatted arguments are an unrecoverable error.
+        if splatted_args.len() > 1 {
+            return Err(InvalidSplattedArgError::Duplicate { splatted_args, splatted_spans });
+        }
+
+        Ok(splatted_args.first().copied())
     }
 }
 

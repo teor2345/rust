@@ -721,6 +721,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         // in this binder we are creating.
         assert!(!expected_sig.sig.skip_binder().has_vars_bound_above(ty::INNERMOST));
         let bound_sig = expected_sig.sig.map_bound(|sig| {
+            // Splatting is unsupported on closures.
             let fn_sig_kind = FnSigKind::default()
                 .set_abi(ExternAbi::RustCall)
                 .set_safe(true)
@@ -858,6 +859,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
             let inputs =
                 supplied_sig.inputs().into_iter().map(|&ty| self.resolve_vars_if_possible(ty));
 
+            // Splatting is unsupported on closures.
             let fn_sig_kind = FnSigKind::default()
                 .set_abi(ExternAbi::RustCall)
                 .set_safe(true)
@@ -933,6 +935,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
             },
         };
 
+        // Splatting is unsupported on closures.
         let fn_sig_kind = FnSigKind::default()
             .set_abi(ExternAbi::RustCall)
             .set_safe(true)
@@ -1096,6 +1099,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
             lowerer.lower_ty(output);
         }
 
+        // Splatting is unsupported on closures.
         let fn_sig_kind = FnSigKind::default()
             .set_abi(ExternAbi::RustCall)
             .set_safe(true)

@@ -1,10 +1,22 @@
+<<<<<<< HEAD
 error: symbol-name(_ZN5basic4main17h947b7a9ed2b2bf56E)
+||||||| parent of 75b493dae10 (Impl typeck & MIR lowering for argument splatting)
+error: symbol-name(_ZN5basic4main17h1dddcfd03744167fE)
+=======
+error: symbol-name(_ZN5basic4main17h2dcbca9790685248E)
+>>>>>>> 75b493dae10 (Impl typeck & MIR lowering for argument splatting)
   --> $DIR/basic.rs:8:1
    |
 LL | #[rustc_dump_symbol_name]
    | ^^^^^^^^^^^^^^^^^^^^^^^^^
 
+<<<<<<< HEAD
 error: demangling(basic::main::h947b7a9ed2b2bf56)
+||||||| parent of 75b493dae10 (Impl typeck & MIR lowering for argument splatting)
+error: demangling(basic::main::h1dddcfd03744167f)
+=======
+error: demangling(basic::main::h2dcbca9790685248)
+>>>>>>> 75b493dae10 (Impl typeck & MIR lowering for argument splatting)
   --> $DIR/basic.rs:8:1
    |
 LL | #[rustc_dump_symbol_name]

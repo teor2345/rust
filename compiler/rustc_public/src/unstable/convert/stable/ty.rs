@@ -270,6 +270,7 @@ impl<'tcx> Stable<'tcx> for ty::FnSigKind {
 }
 
 impl<'tcx> Stable<'tcx> for ty::FnSig<'tcx> {
+    // FIXME(splat): When splat is complete (or stable), add a field to FnSig
     type T = crate::ty::FnSig;
     fn stable<'cx>(
         &self,
