@@ -216,9 +216,10 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         }
 
         // First, let's unify the formal method signature with the expectation eagerly.
-        // We use this to guide coercion inference; it's output is "fudged" which means
+        // We use this to guide coercion inference; its output is "fudged" which means
         // any remaining type variables are assigned to new, unrelated variables. This
         // is because the inference guidance here is only speculative.
+        // FIXME(splat): do we need to splat arguments before this type inference?
         let formal_output = self.resolve_vars_with_obligations(formal_output);
         let expected_input_tys: Option<Vec<_>> = expectation
             .only_has_type(self)
@@ -289,27 +290,52 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
 
         let mut err_code = E0061;
 
-        // If the arguments should be wrapped in a tuple (ex: closures), unwrap them here
-        let (formal_input_tys, expected_input_tys) = if tuple_arguments == TupleArguments {
-            let tuple_type = self.structurally_resolve_type(call_span, formal_input_tys[0]);
+        // If the arguments should be wrapped in a tuple (ex: closures, splats), unwrap them here
+        let (formal_input_tys, expected_input_tys) = if let Some(tupled_arg_index) =
+            tuple_arguments.tupled_argument_position()
+        {
+            let tupled_arg_index = usize::from(tupled_arg_index);
+            debug_assert_eq!(
+                Some(tupled_arg_index),
+                formal_input_tys.len().checked_sub(1),
+                "only trailing tupled arguments are implemented",
+            );
+            let tuple_type =
+                self.structurally_resolve_type(call_span, formal_input_tys[tupled_arg_index]);
             match tuple_type.kind() {
                 // We expected a tuple and got a tuple
                 ty::Tuple(arg_types) => {
                     // Argument length differs
-                    if arg_types.len() != provided_args.len() {
+                    // FIXME(splat): update the error code docs when splat is stabilized
+                    if Some(arg_types.len()) != provided_args.len().checked_sub(tupled_arg_index) {
                         err_code = E0057;
                     }
                     let expected_input_tys = match expected_input_tys {
-                        Some(expected_input_tys) => match expected_input_tys.get(0) {
-                            Some(ty) => match ty.kind() {
-                                ty::Tuple(tys) => Some(tys.iter().collect()),
-                                _ => None,
-                            },
-                            None => None,
-                        },
+                        Some(expected_input_tys) => {
+                            match expected_input_tys.get(tupled_arg_index) {
+                                Some(ty) => match ty.kind() {
+                                    ty::Tuple(tys) => Some(
+                                        expected_input_tys
+                                            .into_iter()
+                                            .take(tupled_arg_index)
+                                            .chain(tys.iter())
+                                            .collect::<Vec<_>>(),
+                                    ),
+                                    _ => None,
+                                },
+                                None => None,
+                            }
+                        }
                         None => None,
                     };
-                    (arg_types.iter().collect(), expected_input_tys)
+                    (
+                        formal_input_tys[..tupled_arg_index]
+                            .into_iter()
+                            .cloned()
+                            .chain(arg_types.into_iter())
+                            .collect(),
+                        expected_input_tys,
+                    )
                 }
                 _ => {
                     // Otherwise, there's a mismatch, so clear out what we're expecting, and set
@@ -1376,8 +1402,9 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         // If we're calling a method of a Fn/FnMut/FnOnce trait object implicitly
         // (eg invoking a closure) we want to point at the underlying callable,
         // not the method implicitly invoked (eg call_once).
-        // TupleArguments is set only when this is an implicit call (my_closure(...)) rather than explicit (my_closure.call(...))
-        if tuple_arguments == TupleArguments
+        // TupleAllArguments is set only when this is an implicit call `my_closure(...)` rather
+        // than explicit `my_closure.call(...)`.
+        if tuple_arguments == TupleAllArguments
             && let Some(assoc_item) = self.tcx.opt_associated_item(def_id)
             // Since this is an associated item, it might point at either an impl or a trait item.
             // We want it to always point to the trait item.

@@ -489,9 +489,9 @@ fn report_unexpected_variant_res(
 }
 
 /// Controls whether the arguments are tupled. This is used for the call
-/// operator.
+/// operator and function argument splatting.
 ///
-/// Tupling means that all call-side arguments are packed into a tuple and
+/// Tupling means that trailing call-side arguments are packed into a tuple and
 /// passed as a single parameter. For example, if tupling is enabled, this
 /// function:
 /// ```
@@ -507,10 +507,27 @@ fn report_unexpected_variant_res(
 /// # fn f(x: (isize, isize)) {}
 /// f((1, 2));
 /// ```
+///
+/// For the call operator, all arguments are tupled. For splatting, trailing arguments after
+/// `#[splat]` in the function signature are tupled.
 #[derive(Copy, Clone, Eq, PartialEq)]
 enum TupleArgumentsFlag {
+    /// Arguments are typechecked unchanged.
     DontTupleArguments,
-    TupleArguments,
+    /// All arguments are tupled before typechecking.
+    TupleAllArguments,
+    /// Only the splatted arguments are tupled before typechecking.
+    TupleSplattedArguments { splatted_arg_index: u16 },
+}
+
+impl TupleArgumentsFlag {
+    fn tupled_argument_position(&self) -> Option<u16> {
+        match self {
+            Self::DontTupleArguments => None,
+            Self::TupleAllArguments => Some(0),
+            Self::TupleSplattedArguments { splatted_arg_index } => Some(*splatted_arg_index),
+        }
+    }
 }
 
 fn fatally_break_rust(tcx: TyCtxt<'_>, span: Span) -> ! {
