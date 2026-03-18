@@ -283,7 +283,7 @@ impl<S: Stage> AttributeParser<S> for NakedParser {
             sym::instruction_set,
             sym::repr,
             sym::rustc_std_internal_symbol,
-            // FIXME(#82232, #143834): temporarily renamed to mitigate `#[align]` name ambiguity
+            // FIXME(#82232, #143834): temporarily renamed to mitigate `#[align]` nameres ambiguity
             sym::rustc_align,
             sym::rustc_align_static,
             // obviously compatible with self
