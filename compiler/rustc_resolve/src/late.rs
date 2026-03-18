@@ -5447,6 +5447,7 @@ impl ItemInfoCollector<'_, '_, '_> {
                 param_count: decl.inputs.len(),
                 has_self: decl.has_self(),
                 c_variadic: decl.c_variadic(),
+                splatted: decl.splatted(),
                 attrs: create_delegation_attrs(attrs),
             },
         );

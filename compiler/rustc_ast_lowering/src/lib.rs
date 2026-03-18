@@ -1692,6 +1692,7 @@ impl<'a, 'hir> LoweringContext<'a, 'hir> {
         coro: Option<CoroutineKind>,
     ) -> &'hir hir::FnDecl<'hir> {
         let c_variadic = decl.c_variadic();
+        let splatted = decl.splatted();
 
         // Skip the `...` (`CVarArgs`) trailing arguments from the AST,
         // as they are not explicit in HIR/Ty function signatures.
@@ -1764,6 +1765,7 @@ impl<'a, 'hir> LoweringContext<'a, 'hir> {
             inputs,
             output,
             c_variadic,
+            splatted,
             lifetime_elision_allowed: self.resolver.lifetime_elision_allowed.contains(&fn_node_id),
             implicit_self: decl.inputs.get(0).map_or(hir::ImplicitSelfKind::None, |arg| {
                 let is_mutable_pat = matches!(

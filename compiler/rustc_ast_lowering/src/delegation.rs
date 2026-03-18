@@ -187,7 +187,7 @@ impl<'hir> LoweringContext<'_, 'hir> {
 
                 // Here we use `root_function_id` as we can not get params information out of potential delegation reuse,
                 // we need a function to extract this information
-                let (param_count, c_variadic) = self.param_count(root_function_id);
+                let (param_count, c_variadic, splatted) = self.param_count(root_function_id);
 
                 let mut generics = self.lower_delegation_generics(
                     delegation,
@@ -212,6 +212,7 @@ impl<'hir> LoweringContext<'_, 'hir> {
                     delegee_id,
                     param_count,
                     c_variadic,
+                    splatted,
                     span,
                     &generics,
                 );
@@ -400,15 +401,15 @@ impl<'hir> LoweringContext<'_, 'hir> {
     }
 
     // Function parameter count, including C variadic `...` if present.
-    fn param_count(&self, def_id: DefId) -> (usize, bool /*c_variadic*/) {
+    fn param_count(&self, def_id: DefId) -> (usize, bool /*c_variadic*/, bool /*splatted*/) {
         if let Some(local_sig_id) = def_id.as_local() {
             match self.resolver.delegation_fn_sigs.get(&local_sig_id) {
-                Some(sig) => (sig.param_count, sig.c_variadic),
-                None => (0, false),
+                Some(sig) => (sig.param_count, sig.c_variadic, sig.splatted),
+                None => (0, false, false),
             }
         } else {
             let sig = self.tcx.fn_sig(def_id).skip_binder().skip_binder();
-            (sig.inputs().len() + usize::from(sig.c_variadic), sig.c_variadic)
+            (sig.inputs().len() + usize::from(sig.c_variadic), sig.c_variadic, sig.splatted)
         }
     }
 
@@ -417,6 +418,7 @@ impl<'hir> LoweringContext<'_, 'hir> {
         sig_id: DefId,
         param_count: usize,
         c_variadic: bool,
+        splatted: bool,
         span: Span,
         generics: &GenericsGenerationResults<'hir>,
     ) -> &'hir hir::FnDecl<'hir> {
@@ -445,6 +447,7 @@ impl<'hir> LoweringContext<'_, 'hir> {
             inputs,
             output: hir::FnRetTy::Return(output),
             c_variadic,
+            splatted,
             lifetime_elision_allowed: true,
             implicit_self: hir::ImplicitSelfKind::None,
         })
@@ -757,6 +760,7 @@ impl<'hir> LoweringContext<'_, 'hir> {
             inputs: &[],
             output: hir::FnRetTy::DefaultReturn(span),
             c_variadic: false,
+            splatted: false,
             lifetime_elision_allowed: true,
             implicit_self: hir::ImplicitSelfKind::None,
         });

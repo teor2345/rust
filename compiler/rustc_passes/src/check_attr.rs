@@ -1708,6 +1708,7 @@ impl<'tcx> CheckAttrVisitor<'tcx> {
             ),
             token_stream,
             false,
+            false,
             Safety::Safe,
             ExternAbi::Rust,
         );

@@ -257,6 +257,7 @@ pub struct DelegationFnSig {
     pub param_count: usize,
     pub has_self: bool,
     pub c_variadic: bool,
+    pub splatted: bool,
     pub attrs: DelegationAttrs,
 }
 

@@ -203,6 +203,7 @@ impl<I: Interner> Relate<I> for ty::FnSig<I> {
         Ok(ty::FnSig {
             inputs_and_output: cx.mk_type_list_from_iter(inputs_and_output)?,
             c_variadic: a.c_variadic,
+            splatted: a.splatted,
             safety: a.safety,
             abi: a.abi,
         })
