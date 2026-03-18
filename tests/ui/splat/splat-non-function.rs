@@ -41,6 +41,8 @@ impl Foo {
 
     fn tuple_1(#[splat] (a,): (u32,)) {}
 
+    // FIXME(splat): this should error except when `self` (or any splatted arg) is a tuple.
+    // Tuple structs should also error until we have a specific use case for them, and so should multiple splats in a fn.
     fn tuple_2_self(#[splat] self, (a, b): (u32, i8)) -> u32 {
         a
     }
@@ -57,7 +59,7 @@ impl Foo {
 }
 
 impl FooTrait for Foo {
-    // FIXME(splat): should different splat attributes be allowed on traits and impls?
+    // FIXME(splat): should conflicting splat attributes be allowed on traits and impls?
     fn tuple_1(_: (u32,)) {}
 
     fn tuple_4(#[splat] self, _: (u32, i8, (), f32)) {}

@@ -99,7 +99,6 @@ fn process_builtin_attrs(
                 }
             }
             AttributeKind::Optimize(optimize, _) => codegen_fn_attrs.optimize = *optimize,
-            // FIXME(splat): translate splat from a hir attr to a codegen attr
             AttributeKind::TargetFeature { features, attr_span, was_forced } => {
                 let Some(sig) = tcx.hir_node_by_def_id(did).fn_sig() else {
                     tcx.dcx().span_delayed_bug(*attr_span, "target_feature applied to non-fn");

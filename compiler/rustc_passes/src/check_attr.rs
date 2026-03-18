@@ -379,7 +379,6 @@ impl<'tcx> CheckAttrVisitor<'tcx> {
                     | AttributeKind::RustcTrivialFieldReads
                     | AttributeKind::RustcUnsafeSpecializationMarker(..)
                     | AttributeKind::ShouldPanic { .. }
-                    // FIXME(splat): check for tuple args, if possible ???
                     | AttributeKind::Splat(..)
                     | AttributeKind::TestRunner(..)
                     | AttributeKind::ThreadLocal
