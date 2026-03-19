@@ -30,6 +30,7 @@ makro = "makro" # deliberate misspelling to avoid `macro` keyword
 misformed = "misformed"
 moreso = "moreso"
 numer = "numer" # short for numerator, not a typo for "number"
+old-skool = "old-skool" # variant spelling of "old-school"
 optin = "optin" # short for opt-in
 publically = "publically"
 rplace = "rplace" # short for R-place
