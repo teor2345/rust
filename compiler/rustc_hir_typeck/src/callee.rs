@@ -96,9 +96,15 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
             ty::FnDef(def_id, _) => {
                 let abi = self.tcx.fn_sig(def_id).skip_binder().skip_binder().abi;
                 self.check_call_abi(abi, call_expr.span);
+                if std::env::var("TEOR").is_ok() {
+                    dbg!("check_expr_call/FnDef:", call_expr, callee_expr, arg_exprs, abi);
+                }
             }
             ty::FnPtr(_, header) => {
                 self.check_call_abi(header.abi, call_expr.span);
+                if std::env::var("TEOR").is_ok() {
+                    dbg!("check_expr_call/FnPtr:", call_expr, callee_expr, arg_exprs, header.abi);
+                }
             }
             _ => { /* cannot have a non-rust abi */ }
         }
@@ -116,6 +122,9 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
 
         let output = match result {
             None => {
+                if std::env::var("TEOR").is_ok() {
+                    dbg!("check_expr_call/None:", call_expr, callee_expr, arg_exprs);
+                }
                 // Check all of the arg expressions, but with no expectations
                 // since we don't have a signature to compare them to.
                 for arg in arg_exprs {
@@ -220,6 +229,9 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         arg_exprs: &'tcx [hir::Expr<'tcx>],
         autoderef: &Autoderef<'a, 'tcx>,
     ) -> Option<CallStep<'tcx>> {
+        if std::env::var("TEOR").is_ok() {
+            dbg!("try_overloaded_call_step:", call_expr, callee_expr, arg_exprs);
+        }
         let adjusted_ty =
             self.try_structurally_resolve_type(autoderef.span(), autoderef.final_ty());
 
@@ -228,6 +240,9 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
             ty::FnDef(..) | ty::FnPtr(..) => {
                 let adjustments = self.adjust_steps(autoderef);
                 self.apply_adjustments(callee_expr, adjustments);
+                if std::env::var("TEOR").is_ok() {
+                    dbg!("try_overloaded_call_step/FnDef:", call_expr, callee_expr, adjusted_ty);
+                }
 
                 // If the callee has `#[splat]` on an argument
                 if let hir::ExprKind::Path(ref qpath) = callee_expr.kind
@@ -235,9 +250,20 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                         self.typeck_results.borrow().qpath_res(qpath, callee_expr.hir_id)
                     && self.tcx.fn_sig(def_id).skip_binder().skip_binder().splatted
                 {
+                    if std::env::var("TEOR").is_ok() {
+                        dbg!(
+                            "try_overloaded_call_step/Splatted:",
+                            call_expr,
+                            callee_expr,
+                            adjusted_ty
+                        );
+                    }
                     return Some(CallStep::Splatted(adjusted_ty));
                 }
 
+                if std::env::var("TEOR").is_ok() {
+                    dbg!("try_overloaded_call_step/Builtin:", call_expr, callee_expr, adjusted_ty);
+                }
                 return Some(CallStep::Builtin(adjusted_ty));
             }
 
@@ -328,6 +354,9 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
             // The simplest fix by far is to just ignore this case and deref again,
             // so we wind up with `FnMut::call_mut(&mut *f, ())`.
             ty::Ref(..) if autoderef.step_count() == 0 => {
+                if std::env::var("TEOR").is_ok() {
+                    dbg!("try_overloaded_call_step/Ref hack:", call_expr, callee_expr);
+                }
                 return None;
             }
 
@@ -360,6 +389,15 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                 let mut adjustments = self.adjust_steps(autoderef);
                 adjustments.extend(autoref);
                 self.apply_adjustments(callee_expr, adjustments);
+                if std::env::var("TEOR").is_ok() {
+                    dbg!(
+                        "try_overloaded_call_step/Overloaded:",
+                        call_expr,
+                        callee_expr,
+                        adjusted_ty,
+                        method
+                    );
+                }
                 CallStep::Overloaded(method)
             })
     }

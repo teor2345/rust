@@ -290,6 +290,16 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
 
         let mut err_code = E0061;
 
+        if std::env::var("TEOR").is_ok() {
+            dbg!(
+                "check_argument_types:",
+                call_expr,
+                formal_input_tys,
+                provided_args,
+                tuple_arguments
+            );
+        }
+
         // If the arguments should be wrapped in a tuple (ex: closures, splats), unwrap them here
         let (formal_input_tys, expected_input_tys) = if let Some(tupled_arg_index) =
             tuple_arguments.tupled_argument_position()
@@ -302,6 +312,15 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
             );
             let tuple_type =
                 self.structurally_resolve_type(call_span, formal_input_tys[tupled_arg_index]);
+            if std::env::var("TEOR").is_ok() {
+                dbg!(
+                    "check_argument_types/tupled:",
+                    call_expr,
+                    formal_input_tys,
+                    tuple_arguments,
+                    tuple_type
+                );
+            }
             match tuple_type.kind() {
                 // We expected a tuple and got a tuple
                 ty::Tuple(arg_types) => {
@@ -443,6 +462,17 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         } else {
             provided_arg_count == minimum_input_count
         };
+        if std::env::var("TEOR").is_ok() {
+            dbg!(
+                "check_argument_types/arg_count:",
+                call_expr,
+                &formal_input_tys,
+                tuple_arguments,
+                call_appears_satisfied,
+                provided_arg_count,
+                minimum_input_count,
+            );
+        }
 
         // Check the arguments.
         // We do this in a pretty awful way: first we type-check any arguments
