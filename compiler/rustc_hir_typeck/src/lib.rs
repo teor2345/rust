@@ -510,7 +510,7 @@ fn report_unexpected_variant_res(
 ///
 /// For the call operator, all arguments are tupled. For splatting, trailing arguments after
 /// `#[splat]` in the function signature are tupled.
-#[derive(Copy, Clone, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
 enum TupleArgumentsFlag {
     /// Arguments are typechecked unchanged.
     DontTupleArguments,

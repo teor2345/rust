@@ -1,5 +1,6 @@
 //! Test that using `#[splat]` on non-tuple function arguments is an error.
 //@ check-pass
+
 #![allow(incomplete_features)]
 #![feature(splat)]
 #![expect(unused)]

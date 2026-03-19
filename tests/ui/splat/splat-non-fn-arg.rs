@@ -1,7 +1,7 @@
+//! Test that using `#[splat]` on non-function-arguments is an error.
+
 #![allow(incomplete_features)]
 #![feature(splat)]
-
-//! Test that using `#[splat]` on non-function-arguments is an error.
 
 #[splat] //~ ERROR `#[splat]` attribute cannot be used on functions
 fn tuple_args_bad((a, b): (u32, i8)) {}

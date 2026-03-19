@@ -295,7 +295,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
             tuple_arguments.tupled_argument_position()
         {
             let tupled_arg_index = usize::from(tupled_arg_index);
-            debug_assert_eq!(
+            assert_eq!(
                 Some(tupled_arg_index),
                 formal_input_tys.len().checked_sub(1),
                 "only trailing tupled arguments are implemented",
@@ -306,7 +306,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                 // We expected a tuple and got a tuple
                 ty::Tuple(arg_types) => {
                     // Argument length differs
-                    // FIXME(splat): update the error code docs when splat is stabilized
+                    // FIXME(splat): update the error code E0057 docs when splat is stabilized
                     if Some(arg_types.len()) != provided_args.len().checked_sub(tupled_arg_index) {
                         err_code = E0057;
                     }
@@ -340,14 +340,26 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                 _ => {
                     // Otherwise, there's a mismatch, so clear out what we're expecting, and set
                     // our input types to err_args so we don't blow up the error messages
-                    let guar = struct_span_code_err!(
-                        self.dcx(),
-                        call_span,
-                        E0059,
-                        "cannot use call notation; the first type parameter \
-                         for the function trait is neither a tuple nor unit"
-                    )
-                    .emit();
+                    let guar = match tuple_arguments {
+                        TupleAllArguments => struct_span_code_err!(
+                            self.dcx(),
+                            call_span,
+                            E0059,
+                            "cannot use call notation; the first type parameter \
+                            for the function trait is neither a tuple nor unit"
+                        )
+                        .emit(),
+                        TupleSplattedArguments { .. } => struct_span_code_err!(
+                            self.dcx(),
+                            call_span,
+                            // FIXME(splat): add a new error code before stabilization
+                            E0277,
+                            "cannot use splat attribute; the last type parameter \
+                            for the function is neither a tuple nor unit"
+                        )
+                        .emit(),
+                        DontTupleArguments => unreachable!(),
+                    };
                     (self.err_args(provided_args.len(), guar), None)
                 }
             }
