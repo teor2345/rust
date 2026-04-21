@@ -185,14 +185,12 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         // The expressions for each provided argument
         provided_args: &'tcx [hir::Expr<'tcx>],
         // Whether the function is variadic, for example when imported from C
-        // FIXME(splat): maybe change this to FnSigKind?
         c_variadic: bool,
         // Whether the arguments have been bundled in a tuple (ex: closures)
         tuple_arguments: TupleArgumentsFlag,
         // The DefId for the function being called, for better error messages
         fn_def_id: Option<DefId>,
-        // The kind of function being called, with its generics. Only used for splatting. Closures aren't supported.
-        callee_def_kind: Option<DefKind>,
+        // The generics of the function being called. Only used for splatting
         callee_generic_args: Option<ty::GenericArgsRef<'tcx>>,
     ) {
         let tcx = self.tcx;
@@ -340,8 +338,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                             // FIXME(splat): add a new error code before stabilization
                             E0277,
                             "cannot resolve splatted arguments; the last type parameter \
-                                for the function {:?} must be a tuple or unit: {:?}",
-                            callee_def_kind,
+                                for the function must be a tuple or unit: {:?}",
                             ocx_error,
                         )
                         .emit();
@@ -358,8 +355,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                             // FIXME(splat): add a new error code before stabilization
                             E0277,
                             "cannot resolve splatted arguments; the last type parameter \
-                                for the function {:?} must be a tuple or unit: {:?}",
-                            callee_def_kind,
+                                for the function must be a tuple or unit: {:?}",
                             type_errors,
                         )
                         .emit();
@@ -404,13 +400,8 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                     self.write_splatted_call(
                         call_expr.hir_id,
                         call_span,
-                        // FIXME(splat): there's probably a nicer way to do this
-                        callee_def_kind
-                            .expect("splatting is not implemented for closures or Fn* trait calls"),
-                        fn_def_id.expect("splatting is not implemented for FnPtrs"),
-                        callee_generic_args.expect(
-                            "splatting is not implemented for FnPtrs, closures, or Fn* trait calls",
-                        ),
+                        fn_def_id,
+                        callee_generic_args,
                         first_tupled_arg_index.try_into().unwrap(),
                         tupled_args_count.unwrap().try_into().unwrap(),
                     );

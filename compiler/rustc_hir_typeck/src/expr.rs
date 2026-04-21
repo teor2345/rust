@@ -1496,8 +1496,6 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                     method.sig.c_variadic(),
                     tuple_arguments,
                     Some(method.def_id),
-                    // Methods have to be associated functions
-                    Some(DefKind::AssocFn),
                     Some(method.args),
                 );
 
@@ -1521,7 +1519,6 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                     false,
                     TupleArgumentsFlag::DontTupleArguments,
                     None,
-                    Some(DefKind::AssocFn),
                     Some(GenericArgsRef::default()),
                 );
 

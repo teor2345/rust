@@ -240,7 +240,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
     pub(crate) fn write_splatted_resolution(
         &self,
         hir_id: HirId,
-        r: Result<(DefKind, DefId, u16 /* arg_index */, u16 /* args_count */), ErrorGuaranteed>,
+        r: Result<(Option<DefId>, u16 /* arg_index */, u16 /* args_count */), ErrorGuaranteed>,
     ) {
         self.typeck_results.borrow_mut().splatted_defs_mut().insert(hir_id, r);
     }
@@ -262,9 +262,8 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         &self,
         hir_id: HirId,
         span: Span,
-        callee_def_kind: DefKind,
-        callee_def_id: DefId,
-        callee_generic_args: GenericArgsRef<'tcx>,
+        callee_def_id: Option<DefId>,
+        callee_generic_args: Option<GenericArgsRef<'tcx>>,
         first_tupled_arg_index: u16,
         tupled_args_count: u16,
     ) {
@@ -273,9 +272,11 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
 
         self.write_splatted_resolution(
             hir_id,
-            Ok((callee_def_kind, callee_def_id, first_tupled_arg_index, tupled_args_count)),
+            Ok((callee_def_id, first_tupled_arg_index, tupled_args_count)),
         );
-        self.write_args(hir_id, callee_generic_args);
+        if let Some(callee_generic_args) = callee_generic_args {
+            self.write_args(hir_id, callee_generic_args);
+        }
     }
 
     fn write_args(&self, node_id: HirId, args: GenericArgsRef<'tcx>) {

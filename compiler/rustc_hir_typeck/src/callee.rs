@@ -57,14 +57,12 @@ pub(crate) fn check_legal_trait_for_method_call(
 #[derive(Debug)]
 enum CallStep<'tcx> {
     /// Typecheck a call to a function definition or pointer.
+    /// Includes functions with splatted arguments.
     Builtin(Ty<'tcx>),
     /// Deferred closure Fn* trait typechecking, when the callee is a closure.
     DeferredClosure(LocalDefId, ty::FnSig<'tcx>),
     /// Call overloading when callee implements one of the Fn* traits.
     Overloaded(MethodCallee<'tcx>),
-    /// Caller argument tupling, when callee uses `#[splat]`.
-    /// Contains the adjusted type of the callee, and its kind.
-    Splatted(Ty<'tcx>, def::DefKind),
 }
 
 impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
@@ -153,14 +151,6 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
             Some(CallStep::Overloaded(method_callee)) => {
                 self.confirm_overloaded_call(call_expr, arg_exprs, expected, method_callee)
             }
-
-            Some(CallStep::Splatted(callee_ty, callee_def_kind)) => self.confirm_splatted_call(
-                call_expr,
-                callee_ty,
-                callee_def_kind,
-                arg_exprs,
-                expected,
-            ),
         };
 
         // we must check that return type of called functions is WF:
@@ -233,19 +223,6 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
             ty::FnDef(..) | ty::FnPtr(..) => {
                 let adjustments = self.adjust_steps(autoderef);
                 self.apply_adjustments(callee_expr, adjustments);
-
-                // If the callee has `#[splat]` on an argument
-                if adjusted_ty.fn_sig(self.tcx).splatted().is_some() {
-                    return Some(CallStep::Splatted(
-                        adjusted_ty,
-                        adjusted_ty
-                            .kind()
-                            .def_id()
-                            .map(|def_id| self.tcx.def_kind(def_id))
-                            .unwrap_or(def::DefKind::Fn /* FnPtr */),
-                    ));
-                }
-
                 return Some(CallStep::Builtin(adjusted_ty));
             }
 
@@ -566,7 +543,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         arg_exprs: &'tcx [hir::Expr<'tcx>],
         expected: Expectation<'tcx>,
     ) -> Ty<'tcx> {
-        let (fn_sig, def_id) = match *callee_ty.kind() {
+        let (fn_sig, def_id, callee_generic_args) = match *callee_ty.kind() {
             ty::FnDef(def_id, args) => {
                 self.enforce_context_effects(Some(call_expr.hir_id), call_expr.span, def_id, args);
                 let fn_sig = self.tcx.fn_sig(def_id).instantiate(self.tcx, args).skip_norm_wip();
@@ -595,11 +572,11 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                             .emit();
                     }
                 }
-                (fn_sig, Some(def_id))
+                (fn_sig, Some(def_id), Some(args))
             }
 
             // FIXME(const_trait_impl): these arms should error because we can't enforce them
-            ty::FnPtr(sig_tys, hdr) => (sig_tys.with(hdr), None),
+            ty::FnPtr(sig_tys, hdr) => (sig_tys.with(hdr), None, None),
 
             _ => unreachable!(),
         };
@@ -624,15 +601,17 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
             expected,
             arg_exprs,
             fn_sig.c_variadic(),
-            TupleArgumentsFlag::DontTupleArguments,
+            TupleArgumentsFlag::with_splatted(fn_sig.splatted()),
             def_id,
-            None,
-            None,
+            callee_generic_args,
         );
 
+        // Splatting is currently incompatible with RustCall.
         if fn_sig.abi() == rustc_abi::ExternAbi::RustCall {
             let sp = arg_exprs.last().map_or(call_expr.span, |expr| expr.span);
-            if let Some(ty) = fn_sig.inputs().last().copied() {
+            if let Some(ty) = fn_sig.inputs().last().copied()
+                && fn_sig.splatted().is_none()
+            {
                 self.register_bound(
                     ty,
                     self.tcx.require_lang_item(hir::LangItem::Tuple, sp),
@@ -939,7 +918,6 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
             TupleArgumentsFlag::TupleAllArguments,
             Some(closure_def_id.to_def_id()),
             None,
-            None,
         );
 
         fn_sig.output()
@@ -1020,69 +998,11 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
             TupleArgumentsFlag::TupleAllArguments,
             Some(method.def_id),
             None,
-            None,
         );
 
         self.write_method_call_and_enforce_effects(call_expr.hir_id, call_expr.span, method);
 
         method.sig.output()
-    }
-
-    // TODO(splat): merge this into confirm_builtin_call
-    fn confirm_splatted_call(
-        &self,
-        call_expr: &'tcx hir::Expr<'tcx>,
-        callee_ty: Ty<'tcx>,
-        callee_def_kind: def::DefKind,
-        arg_exprs: &'tcx [hir::Expr<'tcx>],
-        expected: Expectation<'tcx>,
-    ) -> Ty<'tcx> {
-        let (fn_sig, def_id, callee_generic_args) = match *callee_ty.kind() {
-            ty::FnDef(def_id, args) => {
-                self.enforce_context_effects(Some(call_expr.hir_id), call_expr.span, def_id, args);
-                let fn_sig = self.tcx.fn_sig(def_id).instantiate(self.tcx, args).skip_norm_wip();
-                (fn_sig, Some(def_id), Some(args))
-            }
-
-            // FIXME(const_trait_impl): these arms should error because we can't enforce them
-            ty::FnPtr(sig_tys, hdr) => (sig_tys.with(hdr), None, None),
-
-            _ => unreachable!(),
-        };
-
-        // Replace any late-bound regions that appear in the function
-        // signature with region variables. We also have to
-        // renormalize the associated types at this point, since they
-        // previously appeared within a `Binder<>` and hence would not
-        // have been normalized before.
-        let fn_sig = self.instantiate_binder_with_fresh_vars(
-            call_expr.span,
-            BoundRegionConversionTime::FnCall,
-            fn_sig,
-        );
-        let fn_sig = self.normalize(call_expr.span, Unnormalized::new_wip(fn_sig));
-
-        self.check_argument_types(
-            call_expr.span,
-            call_expr,
-            fn_sig.inputs(),
-            fn_sig.output(),
-            expected,
-            arg_exprs,
-            fn_sig.c_variadic(),
-            TupleArgumentsFlag::with_splatted(fn_sig.splatted()),
-            def_id,
-            Some(callee_def_kind),
-            callee_generic_args,
-        );
-
-        // FIXME(splat): is splatting incompatible with RustCall?
-        if fn_sig.abi() == rustc_abi::ExternAbi::RustCall {
-            let sp = arg_exprs.last().map_or(call_expr.span, |expr| expr.span);
-            self.dcx().emit_err(errors::RustCallIncorrectArgs { span: sp });
-        }
-
-        fn_sig.output()
     }
 }
 

@@ -1305,10 +1305,14 @@ impl<'tcx> ThirBuildCx<'tcx> {
         expr: &hir::Expr<'_>,
         span: Span,
     ) -> (Expr<'tcx>, u16 /* arg_index */, u16 /* arg_count */) {
-        let (def_kind, def_id, arg_index, arg_count) =
+        let (def_id, arg_index, arg_count) =
             self.typeck_results.splatted_def(expr.hir_id).unwrap_or_else(|| {
                 span_bug!(expr.span, "no splatted def for function or method callee")
             });
+        let def_id = def_id.unwrap_or_else(|| {
+            span_bug!(expr.span, "no splatted def for function or method callee")
+        });
+        let def_kind = self.tcx.def_kind(def_id);
         let user_ty = self.user_args_applied_to_res(expr.hir_id, Res::Def(def_kind, def_id));
         debug!(
             "splatted_callee: user_ty={:?} def_kind={:?} def_id={:?} arg_index={:?} arg_count={:?}",

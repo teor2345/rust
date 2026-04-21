@@ -39,7 +39,7 @@ pub struct TypeckResults<'tcx> {
     /// Resolved definitions for splatted function calls, including the splatted argument index and
     /// argument count.
     splatted_defs: ItemLocalMap<
-        Result<(DefKind, DefId, u16 /* arg_index */, u16 /* arg_count */), ErrorGuaranteed>,
+        Result<(Option<DefId>, u16 /* arg_index */, u16 /* arg_count */), ErrorGuaranteed>,
     >,
 
     /// Resolved field indices for field accesses in expressions (`S { field }`, `obj.field`)
@@ -298,7 +298,7 @@ impl<'tcx> TypeckResults<'tcx> {
         &self,
     ) -> LocalTableInContext<
         '_,
-        Result<(DefKind, DefId, u16 /* arg_index */, u16 /* arg_count */), ErrorGuaranteed>,
+        Result<(Option<DefId>, u16 /* arg_index */, u16 /* arg_count */), ErrorGuaranteed>,
     > {
         LocalTableInContext { hir_owner: self.hir_owner, data: &self.splatted_defs }
     }
@@ -306,7 +306,7 @@ impl<'tcx> TypeckResults<'tcx> {
     pub fn splatted_def(
         &self,
         id: HirId,
-    ) -> Option<(DefKind, DefId, u16 /* arg_index */, u16 /* arg_count */)> {
+    ) -> Option<(Option<DefId>, u16 /* arg_index */, u16 /* arg_count */)> {
         validate_hir_id_for_typeck_results(self.hir_owner, id);
         self.splatted_defs.get(&id.local_id).cloned().and_then(|r| r.ok())
     }
@@ -315,7 +315,7 @@ impl<'tcx> TypeckResults<'tcx> {
         &mut self,
     ) -> LocalTableInContextMut<
         '_,
-        Result<(DefKind, DefId, u16 /* arg_index */, u16 /* arg_count */), ErrorGuaranteed>,
+        Result<(Option<DefId>, u16 /* arg_index */, u16 /* arg_count */), ErrorGuaranteed>,
     > {
         LocalTableInContextMut { hir_owner: self.hir_owner, data: &mut self.splatted_defs }
     }
@@ -441,8 +441,7 @@ impl<'tcx> TypeckResults<'tcx> {
     }
 
     pub fn is_splatted_call(&self, expr: &hir::Expr<'_>) -> bool {
-        // FIXME(splat): does it make sense to support splatted closure definitions?
-        matches!(self.splatted_defs().get(expr.hir_id), Some(Ok((_, _, _, _))))
+        matches!(self.splatted_defs().get(expr.hir_id), Some(Ok((_, _, _))))
     }
 
     /// Returns the computed binding mode for a `PatKind::Binding` pattern
