@@ -583,13 +583,11 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         // The generics of the function being called. Only used for splatting
         callee_generic_args: Option<ty::GenericArgsRef<'tcx>>,
     ) -> TupledArgCheckOutcome<'tcx> {
-        let mut err_code = None;
-
         let (first_tupled_arg_index, is_self_splatted) = tuple_arguments.tupled_arg_index();
         let Some(first_tupled_arg_index) = first_tupled_arg_index else {
             // If we're not tupling any of the current arguments, we're done.
             return TupledArgCheckOutcome {
-                new_err_code: err_code,
+                new_err_code: None,
                 untupled_formal_input_tys: formal_input_tys,
                 untupled_expected_input_tys: expected_input_tys,
             };
@@ -679,7 +677,9 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
             self.structurally_resolve_type(call_span, formal_input_tys[first_tupled_arg_index])
         };
 
-        // We expected a tuple and got a tuple (or made one ourselves)
+        // We expected a tuple and got a tuple (or made one ourselves).
+        // If it's not a tuple, we error out in the next block.
+        let mut err_code = None;
         if let ty::Tuple(detup_formal_arg_tys) = tuple_type.kind() {
             // Argument length differs
             // FIXME(splat): update the error code E0057 docs when splat is stabilized
