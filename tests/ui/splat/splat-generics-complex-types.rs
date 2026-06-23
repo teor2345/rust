@@ -1,7 +1,5 @@
 //@ run-pass
 //! Test using `#[splat]` on tuples with complex generic types inside the splatted tuple.
-//! This fills the FIXME in splat-generics-everywhere.rs:
-//! "also add generics inside the splatted tuple"
 
 #![allow(incomplete_features)]
 #![feature(splat)]

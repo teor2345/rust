@@ -45,7 +45,6 @@ impl<T> BarTrait for Foo<T> {
     fn trait_const_generic<const N: usize>(&self, #[splat] _s: (u32, f64, [u8; N])) {}
 }
 
-
 fn main() {
     // FIXME(splat): should splatted functions be callable with tupled and un-tupled arguments?
     // Add a tupled test for each call if they are.
