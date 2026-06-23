@@ -698,8 +698,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                 };
 
                 expected_input_tys
-                    .splice(first_tupled_arg_index..=first_tupled_arg_index, substitute_tys)
-                    .for_each(|_| {});
+                    .splice(first_tupled_arg_index..=first_tupled_arg_index, substitute_tys);
             } else {
                 expected_input_tys = None;
             }
@@ -716,12 +715,10 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                 );
             }
 
-            formal_input_tys
-                .splice(
-                    first_tupled_arg_index..=first_tupled_arg_index,
-                    detup_formal_arg_tys.iter(),
-                )
-                .for_each(|_| {});
+            formal_input_tys.splice(
+                first_tupled_arg_index..=first_tupled_arg_index,
+                detup_formal_arg_tys.iter(),
+            );
             if let Some(ref expected_input_tys) = expected_input_tys {
                 assert_eq!(
                     formal_input_tys.len(),
