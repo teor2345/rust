@@ -1722,7 +1722,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                         }
                         None => {
                             if tuple_arguments.is_splatted() {
-                                // FIXME(splat): when the arg is splatted, adjust its index
+                                // FIXME(splat): when the arg is splatted, adjust its index, to handle the type mismatch properly
                                 use_splat_fallback = true;
                             } else {
                                 span_bug!(

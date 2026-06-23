@@ -404,7 +404,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                     // what our ideal rcvr ty would look like.
                     let Some(input_arg) = method.sig.inputs().get(idx + 1) else {
                         if method.sig.splatted().is_some() {
-                            // FIXME(splat): when the arg is splatted, adjust its index
+                            // FIXME(splat): when the arg is splatted, adjust its index, to handle the type mismatch properly
                             return None;
                         } else {
                             span_bug!(
